@@ -206,25 +206,8 @@ static const stress_t stressors[] = {
 
 STRESS_ASSERT(SIZEOF_ARRAY(stressors) != STRESS_MAX)
 
-/*
- *  Different stress classes
- */
-static const stress_class_info_t classes[] = {
-	{ CLASS_CPU_CACHE,	"cpu-cache" },
-	{ CLASS_CPU,		"cpu" },
-	{ CLASS_DEV,		"device" },
-	{ CLASS_FILESYSTEM,	"filesystem" },
-	{ CLASS_GPU,		"gpu" },
-	{ CLASS_INTERRUPT,	"interrupt" },
-	{ CLASS_IO,		"io" },
-	{ CLASS_MEMORY,		"memory" },
-	{ CLASS_NETWORK,	"network" },
-	{ CLASS_OS,		"os" },
-	{ CLASS_PIPE_IO,	"pipe" },
-	{ CLASS_SCHEDULER,	"scheduler" },
-	{ CLASS_SECURITY,	"security" },
-	{ CLASS_VM,		"vm" },
-};
+/* Assigned stressor */
+#define STRESSOR_ID STRESS_cache
 
 /*
  *  GNU "long options" command line options
@@ -1259,67 +1242,6 @@ static void stress_remove_stressor(stress_stressor_t *ss)
 			ss->next->prev = ss->prev;
 	}
 	free(ss);
-}
-
-/*
- *  stress_get_class_id()
- *	find the class id of a given class name
- */
-static uint32_t stress_get_class_id(char *const str)
-{
-	size_t i;
-
-	for (i = 0; i < SIZEOF_ARRAY(classes); i++) {
-		if (!strcmp(classes[i].name, str))
-			return classes[i].class;
-	}
-	return 0;
-}
-
-/*
- *  stress_get_class()
- *	parse for allowed class types, return bit mask of types, 0 if error
- */
-static int stress_get_class(char *const class_str, uint32_t *class)
-{
-	char *str, *token;
-	int ret = 0;
-
-	*class = 0;
-	for (str = class_str; (token = strtok(str, ",")) != NULL; str = NULL) {
-		uint32_t cl = stress_get_class_id(token);
-
-		if (!cl) {
-			size_t i;
-			const size_t len = strlen(token);
-
-			if ((len > 1) && (token[len - 1] == '?')) {
-				token[len - 1] = '\0';
-
-				cl = stress_get_class_id(token);
-				if (cl) {
-					size_t j;
-
-					(void)printf("class '%s' stressors:",
-						token);
-					for (j = 0; stressors[j].name; j++) {
-						if (stressors[j].info->class & cl)
-							(void)printf(" %s", stress_munge_underscore(stressors[j].name));
-					}
-					(void)printf("\n");
-					return 1;
-				}
-			}
-			(void)fprintf(stderr, "Unknown class: '%s', "
-				"available classes:", token);
-			for (i = 0; i < SIZEOF_ARRAY(classes); i++)
-				(void)fprintf(stderr, " %s", classes[i].name);
-			(void)fprintf(stderr, "\n\n");
-			return -1;
-		}
-		*class |= cl;
-	}
-	return ret;
 }
 
 /*
@@ -3303,56 +3225,6 @@ static inline void stress_set_random_stressors(void)
 }
 
 /*
- *  stress_enable_all_stressors()
- *	enable all the stressors
- */
-static void stress_enable_all_stressors(const int32_t instances)
-{
-	size_t i;
-
-	/* Don't enable all if some stressors are set */
-	if (g_opt_flags & OPT_FLAGS_SET)
-		return;
-
-	for (i = 0; i < STRESS_MAX; i++) {
-		stress_stressor_t *ss = stress_find_proc_info(&stressors[i]);
-
-		if (!ss) {
-			(void)fprintf(stderr, "Cannot allocate stressor state info\n");
-			exit(EXIT_FAILURE);
-		}
-		ss->num_instances = instances;
-	}
-}
-
-/*
- *  stress_enable_classes()
- *	enable stressors based on class
- */
-static void stress_enable_classes(const uint32_t class)
-{
-	size_t i;
-
-	if (!class)
-		return;
-
-	/* This indicates some stressors are set */
-	g_opt_flags |= OPT_FLAGS_SET;
-
-	for (i = 0; stressors[i].id != STRESS_MAX; i++) {
-		if (stressors[i].info->class & class) {
-			stress_stressor_t *ss = stress_find_proc_info(&stressors[i]);
-
-			if (g_opt_flags & OPT_FLAGS_SEQUENTIAL)
-				ss->num_instances = g_opt_sequential;
-			if (g_opt_flags & OPT_FLAGS_ALL)
-				ss->num_instances = g_opt_parallel;
-		}
-	}
-}
-
-
-/*
  *  stress_parse_opts
  *	parse argv[] and set stress-ng options accordingly
  */
@@ -3376,36 +3248,15 @@ next_opt:
 			long_options, &option_index)) == -1) {
 			break;
 		}
-
+		
 		for (i = 0; stressors[i].id != STRESS_MAX; i++) {
 			if (stressors[i].short_getopt == c) {
-				const char *name = stress_opt_name(c);
-				stress_stressor_t *ss = stress_find_proc_info(&stressors[i]);
-				g_stressor_current = ss;
-
-				g_opt_flags |= OPT_FLAGS_SET;
-				ss->num_instances = stress_get_int32(optarg);
-				stress_get_processors(&ss->num_instances);
-				stress_check_max_stressors(name, ss->num_instances);
-
-				goto next_opt;
-			}
-			if (stressors[i].op == (stress_op_t)c) {
-				uint64_t bogo_ops;
-
-				bogo_ops = stress_get_uint64(optarg);
-				stress_check_range(stress_opt_name(c), bogo_ops,
-					MIN_OPS, MAX_OPS);
-				/* We don't need to set this, but it may be useful */
-				stress_set_setting(stress_opt_name(c), TYPE_ID_UINT64, &bogo_ops);
-				if (g_stressor_current)
-					g_stressor_current->bogo_ops = bogo_ops;
+				printf("This specialized build of stress-ng will only run the %s stressor! Ignoring other stressors ...\n", stress_opt_name(STRESSOR_ID));
 				goto next_opt;
 			}
 			if (stressors[i].info->opt_set_funcs) {
 				size_t j;
 				const stressor_info_t *info = stressors[i].info;
-
 				for (j = 0; info->opt_set_funcs[j].opt_set_func; j++) {
 					if (info->opt_set_funcs[j].opt == c) {
 						ret = info->opt_set_funcs[j].opt_set_func(optarg);
@@ -3425,12 +3276,6 @@ next_opt:
 		}
 
 		switch (c) {
-		case OPT_all:
-			g_opt_flags |= OPT_FLAGS_ALL;
-			g_opt_parallel = stress_get_int32(optarg);
-			stress_get_processors(&g_opt_parallel);
-			stress_check_max_stressors("all", g_opt_parallel);
-			break;
 		case OPT_backoff:
 			i64 = (int64_t)stress_get_uint64(optarg);
 			stress_set_setting_global("backoff", TYPE_ID_INT64, &i64);
@@ -3449,17 +3294,6 @@ next_opt:
 		case OPT_cache_ways:
 			u32 = stress_get_uint32(optarg);
 			stress_set_setting("cache-ways", TYPE_ID_UINT32, &u32);
-			break;
-		case OPT_class:
-			ret = stress_get_class(optarg, &u32);
-			if (ret < 0)
-				return EXIT_FAILURE;
-			else if (ret > 0)
-				exit(EXIT_SUCCESS);
-			else {
-				stress_set_setting("class", TYPE_ID_UINT32, &u32);
-				stress_enable_classes(u32);
-			}
 			break;
 		case OPT_exclude:
 			stress_set_setting_global("exclude", TYPE_ID_STR, (void *)optarg);
@@ -3503,13 +3337,6 @@ next_opt:
 		case OPT_quiet:
 			g_opt_flags &= ~(PR_ALL);
 			break;
-		case OPT_random:
-			g_opt_flags |= OPT_FLAGS_RANDOM;
-			i32 = stress_get_int32(optarg);
-			stress_get_processors(&i32);
-			stress_check_max_stressors("random", i32);
-			stress_set_setting("random", TYPE_ID_INT32, &i32);
-			break;
 		case OPT_sched:
 			i32 = stress_get_opt_sched(optarg);
 			stress_set_setting_global("sched", TYPE_ID_INT32, &i32);
@@ -3537,13 +3364,6 @@ next_opt:
 			u64 = stress_get_uint64(optarg);
 			g_opt_flags |= OPT_FLAGS_SEED;
 			stress_set_setting_global("seed", TYPE_ID_UINT64, &u64);
-			break;
-		case OPT_sequential:
-			g_opt_flags |= OPT_FLAGS_SEQUENTIAL;
-			g_opt_sequential = stress_get_int32(optarg);
-			stress_get_processors(&g_opt_sequential);
-			stress_check_range("sequential", (uint64_t)g_opt_sequential,
-				MIN_SEQUENTIAL, MAX_SEQUENTIAL);
 			break;
 		case OPT_stressors:
 			stress_show_stressor_names();
@@ -3844,6 +3664,19 @@ int main(int argc, char **argv, char **envp)
 		goto exit_settings_free;
 	}
 
+	/*
+	 *  Assign defined stressor
+	 */
+	stress_stressor_t *ss = stress_find_proc_info(&stressors[STRESSOR_ID]);
+	g_stressor_current = ss;
+	g_opt_flags |= OPT_FLAGS_SET;
+	ss->num_instances = 1;
+	stress_get_processors(&ss->num_instances);
+	stress_check_max_stressors(stressors[STRESSOR_ID].name, ss->num_instances);
+
+	/*
+	 *  Parse command-line options
+	 */
 	ret = stress_parse_opts(argc, argv, false);
 	if (ret != EXIT_SUCCESS)
 		goto exit_settings_free;
@@ -3920,19 +3753,6 @@ int main(int argc, char **argv, char **envp)
 		cpus_configured, cpus_configured == 1 ? "" : "s");
 
 	/*
-	 *  For random mode the stressors must be available
-	 */
-	if (g_opt_flags & OPT_FLAGS_RANDOM)
-		stress_enable_all_stressors(0);
-	/*
-	 *  These two options enable all the stressors
-	 */
-	if (g_opt_flags & OPT_FLAGS_SEQUENTIAL)
-		stress_enable_all_stressors(g_opt_sequential);
-	if (g_opt_flags & OPT_FLAGS_ALL)
-		stress_enable_all_stressors(g_opt_parallel);
-
-	/*
 	 *  Discard stressors that we can't run
 	 */
 	stress_exclude_unsupported(&unsupported);
@@ -3944,11 +3764,6 @@ int main(int argc, char **argv, char **envp)
 		ret = EXIT_FAILURE;
 		goto exit_logging_close;
 	}
-
-	/*
-	 *  Setup random stressors if requested
-	 */
-	stress_set_random_stressors();
 
 	(void)stress_ftrace_start();
 #if defined(STRESS_PERF_STATS) &&	\
