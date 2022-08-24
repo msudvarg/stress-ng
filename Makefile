@@ -459,8 +459,7 @@ CORE_SRC = \
 	core-thrash.c \
 	core-ftrace.c \
 	core-try-open.c \
-	core-vmstat.c \
-	stress-ng.c
+	core-vmstat.c
 
 SRC = $(CORE_SRC) $(STRESS_SRC)
 OBJS = $(SRC:.c=.o)
@@ -468,7 +467,7 @@ OBJS = $(SRC:.c=.o)
 APPARMOR_PARSER=/sbin/apparmor_parser
 
 all: makeconfig
-	$(MAKE) stress-ng VERBOSE=$(VERBOSE)
+	$(MAKE) stressors VERBOSE=$(VERBOSE)
 
 #
 #  Load in and set flags based on config
@@ -486,9 +485,47 @@ OBJS += $(CONFIG_OBJS)
 	$(PRE_Q)echo "CC $<"
 	$(PRE_V)$(CC) $(CFLAGS) -c -o $@ $<
 
-stress-ng: $(OBJS)
+stress-ng-cache.o: stress-ng.c $(HEADERS) $(HEADERS_GEN)
+	$(PRE_Q)echo "CC $<"
+	$(PRE_V)$(CC) $(CFLAGS) -DSTRESSOR_ENUM_NAME="cache" -c -o $@ $<
+
+stress-ng-stream.o: stress-ng.c $(HEADERS) $(HEADERS_GEN)
+	$(PRE_Q)echo "CC $<"
+	$(PRE_V)$(CC) $(CFLAGS) -DSTRESSOR_ENUM_NAME="stream" -c -o $@ $<
+
+stress-ng-udp.o: stress-ng.c $(HEADERS) $(HEADERS_GEN)
+	$(PRE_Q)echo "CC $<"
+	$(PRE_V)$(CC) $(CFLAGS) -DSTRESSOR_ENUM_NAME="udp" -c -o $@ $<
+
+stress-ng-io.o: stress-ng.c $(HEADERS) $(HEADERS_GEN)
+	$(PRE_Q)echo "CC $<"
+	$(PRE_V)$(CC) $(CFLAGS) -DSTRESSOR_ENUM_NAME="io" -c -o $@ $<
+
+stress-ng-brk.o: stress-ng.c $(HEADERS) $(HEADERS_GEN)
+	$(PRE_Q)echo "CC $<"
+	$(PRE_V)$(CC) $(CFLAGS) -DSTRESSOR_ENUM_NAME="brk" -c -o $@ $<
+
+stress-ng-cache: $(OBJS) stress-ng-cache.o
 	$(PRE_Q)echo "LD $@"
-	$(PRE_V)$(CC) $(CPPFLAGS) $(CFLAGS) $(OBJS) -lm $(LDFLAGS) -o $@
+	$(PRE_V)$(CC) $(CPPFLAGS) $(CFLAGS) $^ -lm $(LDFLAGS) -o $@
+
+stress-ng-stream: $(OBJS) stress-ng-stream.o
+	$(PRE_Q)echo "LD $@"
+	$(PRE_V)$(CC) $(CPPFLAGS) $(CFLAGS) $^ -lm $(LDFLAGS) -o $@
+
+stress-ng-udp: $(OBJS) stress-ng-udp.o
+	$(PRE_Q)echo "LD $@"
+	$(PRE_V)$(CC) $(CPPFLAGS) $(CFLAGS) $^ -lm $(LDFLAGS) -o $@
+
+stress-ng-io: $(OBJS) stress-ng-io.o
+	$(PRE_Q)echo "LD $@"
+	$(PRE_V)$(CC) $(CPPFLAGS) $(CFLAGS) $^ -lm $(LDFLAGS) -o $@
+
+stress-ng-brk: $(OBJS) stress-ng-brk.o
+	$(PRE_Q)echo "LD $@"
+	$(PRE_V)$(CC) $(CPPFLAGS) $(CFLAGS) $^ -lm $(LDFLAGS) -o $@
+
+stressors: stress-ng-cache stress-ng-stream stress-ng-udp stress-ng-io stress-ng-brk
 
 config.h:
 	$(MAKE) CC="$(CC)" STATIC=$(STATIC) -f Makefile.config
@@ -592,6 +629,7 @@ clean:
 	$(PRE_V)rm -f config config.h
 	$(PRE_V)rm -rf configs
 	$(PRE_V)rm -f tags
+	$(PRE_V) rm -f stress-ng-cache stress-ng-stream stress-ng-udp stress-ng-io stress-ng-brk
 
 .PHONY: fast-test-all
 fast-test-all: all

@@ -206,8 +206,10 @@ static const stress_t stressors[] = {
 
 STRESS_ASSERT(SIZEOF_ARRAY(stressors) != STRESS_MAX)
 
-/* Assigned stressor */
-#define STRESSOR_ID STRESS_cache
+/* Assign stressor via preprocessor directive */
+#define STRESSOR_GET_ENUM_TOKEN(STRESSOR) STRESS_##STRESSOR
+#define STRESSOR_GET_ENUM(STRESSOR) STRESSOR_GET_ENUM_TOKEN(STRESSOR)
+const unsigned STRESSOR_ID = STRESSOR_GET_ENUM(STRESSOR_ENUM_NAME);
 
 /*
  *  GNU "long options" command line options
