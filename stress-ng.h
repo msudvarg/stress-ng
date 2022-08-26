@@ -945,6 +945,7 @@ typedef enum {
 	OPT_cache = 'C',
 	OPT_hdd = 'd',
 	OPT_dentry = 'D',
+	OPT_epochs = 'e',
 	OPT_fork = 'f',
 	OPT_fallocate = 'F',
 	OPT_io = 'i',
@@ -1170,8 +1171,6 @@ typedef enum {
 
 	OPT_env,
 	OPT_env_ops,
-
-	OPT_epochs,
 
 	OPT_epoll,
 	OPT_epoll_ops,
@@ -2194,6 +2193,7 @@ typedef struct {
 /* Various global option settings and flags */
 extern const char g_app_name[];		/* Name of application */
 extern stress_shared_t *g_shared;	/* shared memory */
+extern uint32_t g_opt_epochs;			/* # of epochs over which to collect statistics */
 extern uint64_t	g_opt_timeout;		/* timeout in seconds */
 extern uint64_t	g_opt_flags;		/* option flags */
 extern int32_t g_opt_sequential;	/* Number of sequential stressors */

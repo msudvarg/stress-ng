@@ -22,7 +22,7 @@ VERSION=0.14.03
 # Codename "hungry hypnotized hedgehog"
 #
 
-CFLAGS += -Wall -Wextra -DVERSION='"$(VERSION)"' -O2 -std=gnu99
+CFLAGS += -g -Wall -Wextra -DVERSION='"$(VERSION)"' -O2 -std=gnu99
 
 #
 # Pedantic flags

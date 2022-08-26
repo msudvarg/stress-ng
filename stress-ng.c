@@ -60,7 +60,7 @@ static int terminate_signum;			/* signal sent to process */
 static pid_t main_pid;				/* stress-ng main pid */
 
 /* Globals */
-int32_t g_opt_epochs = 1; /* # of epochs over which to collect statistics */
+uint32_t g_opt_epochs = 1; /* # of epochs over which to collect statistics */
 int32_t g_opt_sequential = DEFAULT_SEQUENTIAL;	/* # of sequential stressors */
 int32_t g_opt_parallel = DEFAULT_PARALLEL;	/* # of parallel stressors */
 uint64_t g_opt_timeout = TIMEOUT_NOT_SET;	/* timeout in seconds */
@@ -2218,6 +2218,7 @@ static void MLOCKED_TEXT stress_run(
 	bool *success,
 	bool *resource_success,
 	bool *metrics_success,
+	uint32_t epoch,
 	stress_checksum_t **checksum)
 {
 	double time_start, time_finish;
@@ -2242,14 +2243,20 @@ static void MLOCKED_TEXT stress_run(
 		int32_t j;
 
 		/*
+		 * Reset number of started instances to 0 to support multiple epochs
+		 */
+		g_stressor_current->started_instances = 0;
+
+		/*
 		 *  Each stressor has 1 or more instances to run
 		 */
 		for (j = 0; j < g_stressor_current->num_instances; j++, (*checksum)++) {
 			int rc = EXIT_SUCCESS;
+			uint32_t epoch_offset = epoch * g_stressor_current->num_instances;
 			size_t i;
 			pid_t pid, child_pid;
 			char name[64];
-			stress_stats_t *const stats = g_stressor_current->stats[j];
+			stress_stats_t *const stats = g_stressor_current->stats[epoch_offset + j];
 			double run_duration, fork_time_start;
 			bool ok;
 
@@ -2517,9 +2524,12 @@ static void stress_metrics_check(bool *success)
 
 	for (ss = stressors_head; ss; ss = ss->next) {
 		int32_t j;
+		uint32_t epoch;
 
+		for (epoch = 0; epoch < g_opt_epochs; epoch++) {
 		for (j = 0; j < ss->started_instances; j++) {
-			const stress_stats_t *const stats = ss->stats[j];
+			uint32_t epoch_offset = epoch * ss->started_instances;
+			const stress_stats_t *const stats = ss->stats[epoch_offset + j];
 			const stress_checksum_t *checksum = stats->checksum;
 			stress_checksum_t stats_checksum;
 			const double duration = stats->finish - stats->start;
@@ -2558,6 +2568,7 @@ static void stress_metrics_check(bool *success)
 					stats_checksum.hash, checksum->hash);
 				ok = false;
 			}
+		}
 		}
 	}
 
@@ -3624,7 +3635,7 @@ static void stress_alloc_proc_resources(
 	stress_stats_t ***stats,
 	const int32_t n)
 {
-	*stats = calloc((size_t)n, sizeof(stress_stats_t *));
+	*stats = calloc((size_t)n * g_opt_epochs, sizeof(stress_stats_t *));
 	if (!*stats) {
 		pr_err("cannot allocate stats list\n");
 		stress_stressors_free();
@@ -3713,8 +3724,10 @@ static inline void stress_run_sequential(
 		stress_stressor_t *next = ss->next;
 
 		ss->next = NULL;
-		stress_run(ss, duration, success, resource_success,
-			metrics_success, &checksum);
+		for (uint32_t epoch = 0; epoch < g_opt_epochs; epoch++) {
+			stress_run(ss, duration, success, resource_success,
+				metrics_success, epoch, &checksum);
+			}
 		ss->next = next;
 
 	}
@@ -3735,8 +3748,10 @@ static inline void stress_run_parallel(
 	/*
 	 *  Run all stressors in parallel
 	 */
-	stress_run(stressors_head, duration, success, resource_success,
-			metrics_success, &checksum);
+	for (uint32_t epoch = 0; epoch < g_opt_epochs; epoch++) {
+		stress_run(stressors_head, duration, success, resource_success,
+				metrics_success, epoch, &checksum);
+	}
 }
 
 /*
