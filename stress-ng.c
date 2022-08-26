@@ -3547,7 +3547,7 @@ int stress_parse_opts(int argc, char **argv, const bool jobmode)
 		opterr = (!jobmode) ? opterr : 0;
 
 next_opt:
-		if ((c = getopt_long(argc, argv, "?khMVvqnt:b:c:i:j:m:d:f:s:l:p:P:C:S:a:y:F:D:T:u:o:r:B:R:Y:x:",
+		if ((c = getopt_long(argc, argv, "?khMVvqnt:b:c:e:i:j:m:d:f:s:l:p:P:C:S:a:y:F:D:T:u:o:r:B:R:Y:x:",
 			long_options, &option_index)) == -1) {
 			break;
 		}
