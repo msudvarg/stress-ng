@@ -24,6 +24,7 @@
 #include "core-pragma.h"
 #include "core-put.h"
 #include "core-smart.h"
+#include "core-stats.h"
 #include "core-stressors.h"
 #include "core-syslog.h"
 #include "core-thermal-zone.h"
@@ -2515,7 +2516,7 @@ static int stress_show_stressors(void)
 			len += buffer_len;
 		}
 	}
-	pr_inf("dispatching hogs:%s\n", str ? str : "");
+	pr_inf("dispatching hogs:%s, %d epoch%s\n", str ? str : "", g_opt_epochs, g_opt_epochs == 1 ? "" : "s");
 	free(str);
 
 	return 0;
@@ -2654,6 +2655,26 @@ static void stress_metrics_dump(
 	pr_yaml(yaml, "metrics:\n");
 
 	for (ss = stressors_head; ss; ss = ss->next) {
+
+		/* Aggregate stats across epochs */
+		stress_aggregate_stats_t c_total_agg, r_total_agg, u_time_agg, s_time_agg,
+			bogo_rate_r_time_agg, bogo_rate_agg, cpu_usage_agg, maxrss_agg;
+
+		if(g_opt_epochs > 1) {
+			stress_init_aggregate_stats(&c_total_agg);
+			stress_init_aggregate_stats(&r_total_agg);
+			stress_init_aggregate_stats(&u_time_agg);
+			stress_init_aggregate_stats(&s_time_agg);
+			stress_init_aggregate_stats(&bogo_rate_r_time_agg);
+			stress_init_aggregate_stats(&bogo_rate_agg);
+			stress_init_aggregate_stats(&cpu_usage_agg);
+			stress_init_aggregate_stats(&maxrss_agg);
+		}
+
+		uint32_t epoch;
+		for (epoch = 0; epoch < g_opt_epochs; epoch++) {
+
+		uint32_t epoch_offset = epoch * ss->started_instances;
 		uint64_t c_total = 0;
 		double   r_total = 0.0, u_total = 0.0, s_total = 0.0;
 		long int maxrss = 0;
@@ -2667,7 +2688,7 @@ static void stress_metrics_dump(
 			continue;
 
 		for (j = 0; j < ss->started_instances; j++) {
-			const stress_stats_t *const stats = ss->stats[j];
+			const stress_stats_t *const stats = ss->stats[epoch_offset + j];
 
 			run_ok  |= stats->run_ok;
 			c_total += stats->counter;
@@ -2712,6 +2733,19 @@ static void stress_metrics_dump(
 		cpu_usage = (r_total > 0) ? 100.0 * t_time / r_total : 0.0;
 		cpu_usage = ss->started_instances ? cpu_usage / ss->started_instances : 0.0;
 
+
+		/*
+		 * Only print details here if we have a single epoch.
+		 * Otherwise we will print aggregate stats later.
+		 */
+		if(g_opt_epochs > 1) {
+			if (epoch == 0) {
+				pr_inf("------------------------------------------------------------------------------------------------------------\n");
+				pr_inf("%-13s\n", munged);
+			}
+		}
+		else {
+
 		if (g_opt_flags & OPT_FLAGS_METRICS_BRIEF) {
 			pr_inf("%-13s %9" PRIu64 " %9.2f %9.2f %9.2f %12.2f %14.2f\n",
 				munged,		/* stress test name */
@@ -2721,6 +2755,7 @@ static void stress_metrics_dump(
 				s_time,		/* actual system time */
 				bogo_rate_r_time, /* bogo ops on wall clock time */
 				bogo_rate);	/* bogo ops per second */
+
 		} else {
 			/* extended metrics */
 			pr_inf("%-13s %9" PRIu64 " %9.2f %9.2f %9.2f %12.2f %14.2f %12.2f %13ld\n",
@@ -2733,6 +2768,19 @@ static void stress_metrics_dump(
 				bogo_rate,	/* bogo ops per second */
 				cpu_usage,	/* % cpu usage */
 				maxrss);	/* maximum RSS in KB */
+		}
+
+		}
+
+		if (g_opt_epochs > 1) {
+			stress_aggregate_stats_insert(&c_total_agg, c_total);
+			stress_aggregate_stats_insert(&r_total_agg, r_total);
+			stress_aggregate_stats_insert(&u_time_agg, u_time);
+			stress_aggregate_stats_insert(&s_time_agg, s_time);
+			stress_aggregate_stats_insert(&bogo_rate_r_time_agg, bogo_rate_r_time);
+			stress_aggregate_stats_insert(&bogo_rate_agg, bogo_rate);
+			stress_aggregate_stats_insert(&cpu_usage_agg, cpu_usage);
+			stress_aggregate_stats_insert(&maxrss_agg, maxrss);
 		}
 
 		pr_yaml(yaml, "    - stressor: %s\n", munged);
@@ -2763,6 +2811,112 @@ static void stress_metrics_dump(
 		}
 
 		pr_yaml(yaml, "\n");
+
+		}		
+
+		if (g_opt_epochs > 1) {
+
+			/* Print min over epochs */
+			if (g_opt_flags & OPT_FLAGS_METRICS_BRIEF) {
+				pr_inf("%-13s %9.0f %9.2f %9.2f %9.2f %12.2f %14.2f\n",
+					"min",		/* stress test name */
+					c_total_agg.min,	/* op count */
+					r_total_agg.min,	/* average real (wall) clock time */
+					u_time_agg.min, 	/* actual user time */
+					s_time_agg.min,		/* actual system time */
+					bogo_rate_r_time_agg.min, /* bogo ops on wall clock time */
+					bogo_rate_agg.min);	/* bogo ops per second */
+
+			} else {
+				/* extended metrics */
+				pr_inf("%-13s %9.0f %9.2f %9.2f %9.2f %12.2f %14.2f %12.2f %13.2f\n",
+					"min",		/* stress test name */
+					c_total_agg.min,	/* op count */
+					r_total_agg.min,	/* average real (wall) clock time */
+					u_time_agg.min, 	/* actual user time */
+					s_time_agg.min,		/* actual system time */
+					bogo_rate_r_time_agg.min, /* bogo ops on wall clock time */
+					bogo_rate_agg.min,	/* bogo ops per second */
+					cpu_usage_agg.min,	/* % cpu usage */
+					maxrss_agg.min);	/* maximum RSS in KB */
+			}
+
+			/* Print max over epochs */
+			if (g_opt_flags & OPT_FLAGS_METRICS_BRIEF) {
+				pr_inf("%-13s %9.0f %9.2f %9.2f %9.2f %12.2f %14.2f\n",
+					"max",		/* stress test name */
+					c_total_agg.max,	/* op count */
+					r_total_agg.max,	/* average real (wall) clock time */
+					u_time_agg.max, 	/* actual user time */
+					s_time_agg.max,		/* actual system time */
+					bogo_rate_r_time_agg.max, /* bogo ops on wall clock time */
+					bogo_rate_agg.max);	/* bogo ops per second */
+
+			} else {
+				/* extended metrics */
+				pr_inf("%-13s %9.0f %9.2f %9.2f %9.2f %12.2f %14.2f %12.2f %13.2f\n",
+					"max",		/* stress test name */
+					c_total_agg.max,	/* op count */
+					r_total_agg.max,	/* average real (wall) clock time */
+					u_time_agg.max, 	/* actual user time */
+					s_time_agg.max,		/* actual system time */
+					bogo_rate_r_time_agg.max, /* bogo ops on wall clock time */
+					bogo_rate_agg.max,	/* bogo ops per second */
+					cpu_usage_agg.max,	/* % cpu usage */
+					maxrss_agg.max);	/* maximum RSS in KB */
+			}
+
+			/* Print mean over epochs */
+			if (g_opt_flags & OPT_FLAGS_METRICS_BRIEF) {
+				pr_inf("%-13s %9.0f %9.2f %9.2f %9.2f %12.2f %14.2f\n",
+					"mean",		/* stress test name */
+					c_total_agg.mean,	/* op count */
+					r_total_agg.mean,	/* average real (wall) clock time */
+					u_time_agg.mean, 	/* actual user time */
+					s_time_agg.mean,		/* actual system time */
+					bogo_rate_r_time_agg.mean, /* bogo ops on wall clock time */
+					bogo_rate_agg.mean);	/* bogo ops per second */
+
+			} else {
+				/* extended metrics */
+				pr_inf("%-13s %9.0f %9.2f %9.2f %9.2f %12.2f %14.2f %12.2f %13.2f\n",
+					"mean",		/* stress test name */
+					c_total_agg.mean,	/* op count */
+					r_total_agg.mean,	/* average real (wall) clock time */
+					u_time_agg.mean, 	/* actual user time */
+					s_time_agg.mean,		/* actual system time */
+					bogo_rate_r_time_agg.mean, /* bogo ops on wall clock time */
+					bogo_rate_agg.mean,	/* bogo ops per second */
+					cpu_usage_agg.mean,	/* % cpu usage */
+					maxrss_agg.mean);	/* maximum RSS in KB */
+			}
+
+			/* Print std dev over epochs */
+			if (g_opt_flags & OPT_FLAGS_METRICS_BRIEF) {
+				pr_inf("%-13s %9.0f %9.2f %9.2f %9.2f %12.2f %14.2f\n",
+					"std dev",		/* stress test name */
+					c_total_agg.std,	/* op count */
+					r_total_agg.std,	/* average real (wall) clock time */
+					u_time_agg.std, 	/* actual user time */
+					s_time_agg.std,		/* actual system time */
+					bogo_rate_r_time_agg.std, /* bogo ops on wall clock time */
+					bogo_rate_agg.std);	/* bogo ops per second */
+
+			} else {
+				/* extended metrics */
+				pr_inf("%-13s %9.0f %9.2f %9.2f %9.2f %12.2f %14.2f %12.2f %13.2f\n",
+					"std dev",		/* stress test name */
+					c_total_agg.std,	/* op count */
+					r_total_agg.std,	/* average real (wall) clock time */
+					u_time_agg.std, 	/* actual user time */
+					s_time_agg.std,		/* actual system time */
+					bogo_rate_r_time_agg.std, /* bogo ops on wall clock time */
+					bogo_rate_agg.std,	/* bogo ops per second */
+					cpu_usage_agg.std,	/* % cpu usage */
+					maxrss_agg.std);	/* maximum RSS in KB */
+			}
+
+		}
 	}
 
 	if (misc_metrics) {
