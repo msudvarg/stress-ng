@@ -1642,10 +1642,8 @@ static void stress_kill_stressors(const int sig)
 
 	for (ss = stressors_head; ss; ss = ss->next) {
 		int32_t i;
-		uint32_t epoch;
-
-		for (epoch = 0; epoch < g_opt_epochs; epoch++) {
-		uint32_t epoch_offset = epoch * ss->started_instances;
+		
+		uint32_t epoch_offset = g_epoch * ss->started_instances;
 		for (i = 0; i < ss->started_instances; i++) {
 			stress_stats_t *const stats = ss->stats[epoch_offset + i];
 			const pid_t pid = stats->pid;
@@ -1654,7 +1652,6 @@ static void stress_kill_stressors(const int sig)
 				(void)kill(pid, signum);
 				stats->signalled = true;
 			}
-		}
 		}
 	}
 }
@@ -1876,11 +1873,9 @@ static void stress_wait_aggressive(stress_stressor_t *stressors_list)
 		(void)shim_usleep(usec_sleep);
 
 		for (ss = stressors_list; ss; ss = ss->next) {
-			int32_t j;			
-			uint32_t epoch;
+			int32_t j;		
 
-			for (epoch = 0; epoch < g_opt_epochs; epoch++) {
-			uint32_t epoch_offset = epoch * ss->started_instances;
+			uint32_t epoch_offset = g_epoch * ss->started_instances;
 			for (j = 0; j < ss->started_instances; j++) {
 				const stress_stats_t *const stats = ss->stats[epoch_offset + j];
 				const pid_t pid = stats->pid;
@@ -1904,7 +1899,6 @@ static void stress_wait_aggressive(stress_stressor_t *stressors_list)
 					if (sched_setaffinity(pid, sizeof(mask), &mask) < 0)
 						return;
 				}
-			}
 			}
 		}
 		if (!procs_alive)
@@ -2035,7 +2029,6 @@ redo:
  */
 static void stress_wait_stressors(
 	stress_stressor_t *stressors_list,
-	uint32_t epoch,
 	bool *success,
 	bool *resource_success,
 	bool *metrics_success)
@@ -2056,7 +2049,7 @@ static void stress_wait_stressors(
 	for (ss = stressors_list; ss; ss = ss->next) {
 		int32_t j;
 
-		uint32_t epoch_offset = epoch * ss->started_instances;
+		uint32_t epoch_offset = g_epoch * ss->started_instances;
 		for (j = 0; j < ss->started_instances; j++) {
 			stress_stats_t *const stats = ss->stats[epoch_offset + j];
 			const pid_t pid = stats->pid;
@@ -2230,7 +2223,6 @@ static void MLOCKED_TEXT stress_run(
 	bool *success,
 	bool *resource_success,
 	bool *metrics_success,
-	uint32_t epoch,
 	stress_checksum_t **checksum)
 {
 	double time_start, time_finish;
@@ -2262,7 +2254,7 @@ static void MLOCKED_TEXT stress_run(
 		/*
 		 *  Each stressor has 1 or more instances to run
 		 */
-		uint32_t epoch_offset = epoch * g_stressor_current->num_instances;
+		uint32_t epoch_offset = g_epoch * g_stressor_current->num_instances;
 		for (j = 0; j < g_stressor_current->num_instances; j++, (*checksum)++) {
 			int rc = EXIT_SUCCESS;
 			size_t i;
@@ -2474,7 +2466,7 @@ wait_for_stressors:
 	if (g_opt_flags & OPT_FLAGS_IGNITE_CPU)
 		stress_ignite_cpu_start();
 
-	stress_wait_stressors(stressors_list, epoch, success, resource_success, metrics_success);
+	stress_wait_stressors(stressors_list, success, resource_success, metrics_success);
 	time_finish = stress_time_now();
 
 	*duration += time_finish - time_start;
@@ -3186,7 +3178,7 @@ STRESS_PRAGMA_POP
 	 *  memory segment so that we can sanity check these for
 	 *  any form of corruption
 	 */
-	len = sizeof(stress_checksum_t) * (size_t)num_procs;
+	len = sizeof(stress_checksum_t) * (size_t)num_procs * g_opt_epochs;
 	sz = (len + page_size) & ~(page_size - 1);
 	g_shared->checksums = (stress_checksum_t *)mmap(NULL, sz,
 		PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);
@@ -3886,19 +3878,21 @@ static inline void stress_run_sequential(
 	stress_stressor_t *ss;
 	stress_checksum_t *checksum = g_shared->checksums;
 
-	/*
-	 *  Step through each stressor one by one
-	 */
-	for (ss = stressors_head; ss && keep_stressing_flag(); ss = ss->next) {
-		stress_stressor_t *next = ss->next;
+	while (g_epoch < g_opt_epochs) {
 
-		ss->next = NULL;
-		for (uint32_t epoch = 0; epoch < g_opt_epochs; epoch++) {
+		/*
+		*  Step through each stressor one by one
+		*/
+		for (ss = stressors_head; ss && keep_stressing_flag(); ss = ss->next) {
+			stress_stressor_t *next = ss->next;
+
+			ss->next = NULL;
 			stress_run(ss, duration, success, resource_success,
-				metrics_success, epoch, &checksum);
-			}
-		ss->next = next;
+				metrics_success, &checksum);
+			ss->next = next;
+		}
 
+		g_epoch++;
 	}
 }
 
@@ -3914,12 +3908,14 @@ static inline void stress_run_parallel(
 {
 	stress_checksum_t *checksum = g_shared->checksums;
 
-	/*
-	 *  Run all stressors in parallel
-	 */
-	for (uint32_t epoch = 0; epoch < g_opt_epochs; epoch++) {
+	while (g_epoch < g_opt_epochs) {
+		/*
+		*  Run all stressors in parallel
+		*/
 		stress_run(stressors_head, duration, success, resource_success,
-				metrics_success, epoch, &checksum);
+				metrics_success, &checksum);
+
+		g_epoch++;
 	}
 }
 
