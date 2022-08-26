@@ -62,6 +62,7 @@ static pid_t main_pid;				/* stress-ng main pid */
 
 /* Globals */
 uint32_t g_opt_epochs = 1; /* # of epochs over which to collect statistics */
+uint32_t g_epoch = 0; /* # of epochs that have elapsed so far */
 int32_t g_opt_sequential = DEFAULT_SEQUENTIAL;	/* # of sequential stressors */
 int32_t g_opt_parallel = DEFAULT_PARALLEL;	/* # of parallel stressors */
 uint64_t g_opt_timeout = TIMEOUT_NOT_SET;	/* timeout in seconds */
@@ -2034,6 +2035,7 @@ redo:
  */
 static void stress_wait_stressors(
 	stress_stressor_t *stressors_list,
+	uint32_t epoch,
 	bool *success,
 	bool *resource_success,
 	bool *metrics_success)
@@ -2053,9 +2055,7 @@ static void stress_wait_stressors(
 #endif
 	for (ss = stressors_list; ss; ss = ss->next) {
 		int32_t j;
-		uint32_t epoch;
 
-		for (epoch = 0; epoch < g_opt_epochs; epoch++) {
 		uint32_t epoch_offset = epoch * ss->started_instances;
 		for (j = 0; j < ss->started_instances; j++) {
 			stress_stats_t *const stats = ss->stats[epoch_offset + j];
@@ -2070,7 +2070,6 @@ static void stress_wait_stressors(
 				stress_clean_dir(name, pid, (uint32_t)j);
 
 			}
-		}
 		}
 	}
 	if (g_opt_flags & OPT_FLAGS_IGNITE_CPU)
@@ -2475,7 +2474,7 @@ wait_for_stressors:
 	if (g_opt_flags & OPT_FLAGS_IGNITE_CPU)
 		stress_ignite_cpu_start();
 
-	stress_wait_stressors(stressors_list, success, resource_success, metrics_success);
+	stress_wait_stressors(stressors_list, epoch, success, resource_success, metrics_success);
 	time_finish = stress_time_now();
 
 	*duration += time_finish - time_start;
