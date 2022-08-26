@@ -1640,15 +1640,19 @@ static void stress_kill_stressors(const int sig)
 
 	for (ss = stressors_head; ss; ss = ss->next) {
 		int32_t i;
+		uint32_t epoch;
 
+		for (epoch = 0; epoch < g_opt_epochs; epoch++) {
+		uint32_t epoch_offset = epoch * ss->started_instances;
 		for (i = 0; i < ss->started_instances; i++) {
-			stress_stats_t *const stats = ss->stats[i];
+			stress_stats_t *const stats = ss->stats[epoch_offset + i];
 			const pid_t pid = stats->pid;
 
 			if (pid && !stats->signalled) {
 				(void)kill(pid, signum);
 				stats->signalled = true;
 			}
+		}
 		}
 	}
 }
@@ -1870,10 +1874,13 @@ static void stress_wait_aggressive(stress_stressor_t *stressors_list)
 		(void)shim_usleep(usec_sleep);
 
 		for (ss = stressors_list; ss; ss = ss->next) {
-			int32_t j;
+			int32_t j;			
+			uint32_t epoch;
 
+			for (epoch = 0; epoch < g_opt_epochs; epoch++) {
+			uint32_t epoch_offset = epoch * ss->started_instances;
 			for (j = 0; j < ss->started_instances; j++) {
-				const stress_stats_t *const stats = ss->stats[j];
+				const stress_stats_t *const stats = ss->stats[epoch_offset + j];
 				const pid_t pid = stats->pid;
 
 				if (pid) {
@@ -1895,6 +1902,7 @@ static void stress_wait_aggressive(stress_stressor_t *stressors_list)
 					if (sched_setaffinity(pid, sizeof(mask), &mask) < 0)
 						return;
 				}
+			}
 			}
 		}
 		if (!procs_alive)
@@ -2044,9 +2052,12 @@ static void stress_wait_stressors(
 #endif
 	for (ss = stressors_list; ss; ss = ss->next) {
 		int32_t j;
+		uint32_t epoch;
 
+		for (epoch = 0; epoch < g_opt_epochs; epoch++) {
+		uint32_t epoch_offset = epoch * ss->started_instances;
 		for (j = 0; j < ss->started_instances; j++) {
-			stress_stats_t *const stats = ss->stats[j];
+			stress_stats_t *const stats = ss->stats[epoch_offset + j];
 			const pid_t pid = stats->pid;
 
 			if (pid) {
@@ -2058,6 +2069,7 @@ static void stress_wait_stressors(
 				stress_clean_dir(name, pid, (uint32_t)j);
 
 			}
+		}
 		}
 	}
 	if (g_opt_flags & OPT_FLAGS_IGNITE_CPU)
@@ -2250,9 +2262,9 @@ static void MLOCKED_TEXT stress_run(
 		/*
 		 *  Each stressor has 1 or more instances to run
 		 */
+		uint32_t epoch_offset = epoch * g_stressor_current->num_instances;
 		for (j = 0; j < g_stressor_current->num_instances; j++, (*checksum)++) {
 			int rc = EXIT_SUCCESS;
-			uint32_t epoch_offset = epoch * g_stressor_current->num_instances;
 			size_t i;
 			pid_t pid, child_pid;
 			char name[64];
@@ -2527,8 +2539,8 @@ static void stress_metrics_check(bool *success)
 		uint32_t epoch;
 
 		for (epoch = 0; epoch < g_opt_epochs; epoch++) {
+		uint32_t epoch_offset = epoch * ss->started_instances;
 		for (j = 0; j < ss->started_instances; j++) {
-			uint32_t epoch_offset = epoch * ss->started_instances;
 			const stress_stats_t *const stats = ss->stats[epoch_offset + j];
 			const stress_checksum_t *checksum = stats->checksum;
 			stress_checksum_t stats_checksum;
@@ -3272,8 +3284,9 @@ static inline void stress_setup_stats_buffers(void)
 		uint32_t epoch;
 
 		for (epoch = 0; epoch < g_opt_epochs; epoch++) {
+			uint32_t epoch_offset = epoch * ss->num_instances;
 			for (j = 0; j < ss->num_instances; j++, stats++)
-				ss->stats[j] = stats;
+				ss->stats[epoch_offset + j] = stats;
 		}
 	}
 }
