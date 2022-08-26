@@ -2963,7 +2963,7 @@ static inline void stress_shared_map(const int32_t num_procs)
 {
 	const size_t page_size = stress_get_page_size();
 	size_t len = sizeof(stress_shared_t) +
-		     (sizeof(stress_stats_t) * (size_t)num_procs);
+		     (sizeof(stress_stats_t) * (size_t)num_procs * g_opt_epochs);
 	size_t sz = (len + (page_size << 1)) & ~(page_size - 1);
 #if defined(HAVE_MPROTECT)
 	void *last_page;
@@ -3269,9 +3269,12 @@ static inline void stress_setup_stats_buffers(void)
 
 	for (ss = stressors_head; ss; ss = ss->next) {
 		int32_t j;
+		uint32_t epoch;
 
-		for (j = 0; j < ss->num_instances; j++, stats++)
-			ss->stats[j] = stats;
+		for (epoch = 0; epoch < g_opt_epochs; epoch++) {
+			for (j = 0; j < ss->num_instances; j++, stats++)
+				ss->stats[j] = stats;
+		}
 	}
 }
 
