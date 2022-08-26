@@ -1171,6 +1171,8 @@ typedef enum {
 	OPT_env,
 	OPT_env_ops,
 
+	OPT_epochs,
+
 	OPT_epoll,
 	OPT_epoll_ops,
 	OPT_epoll_port,

@@ -60,6 +60,7 @@ static int terminate_signum;			/* signal sent to process */
 static pid_t main_pid;				/* stress-ng main pid */
 
 /* Globals */
+int32_t g_opt_epochs = 1; /* # of epochs over which to collect statistics */
 int32_t g_opt_sequential = DEFAULT_SEQUENTIAL;	/* # of sequential stressors */
 int32_t g_opt_parallel = DEFAULT_PARALLEL;	/* # of parallel stressors */
 uint64_t g_opt_timeout = TIMEOUT_NOT_SET;	/* timeout in seconds */
@@ -381,6 +382,7 @@ static const struct option long_options[] = {
 	{ "enosys-ops",		1,	0,	OPT_enosys_ops },
 	{ "env",		1,	0,	OPT_env },
 	{ "env-ops",		1,	0,	OPT_env_ops },
+	{ "epochs",		1,	0,	OPT_epochs },
 	{ "epoll",		1,	0,	OPT_epoll },
 	{ "epoll-ops",		1,	0,	OPT_epoll_ops },
 	{ "epoll-domain",	1,	0,	OPT_epoll_domain },
@@ -1147,6 +1149,7 @@ static const stress_help_t help_generic[] = {
 	{ "b N",	"backoff N",		"wait of N microseconds before work starts" },
 	{ NULL,		"class name",		"specify a class of stressors, use with --sequential" },
 	{ "n",		"dry-run",		"do not run" },
+	{ "e N",	"epochs",		"collect statistics over N epochs (default 1)" },
 	{ NULL,		"ftrace",		"enable kernel function call tracing" },
 	{ "h",		"help",			"show help" },
 	{ NULL,		"ignite-cpu",		"alter kernel controls to make CPU run hot" },
@@ -3460,6 +3463,9 @@ next_opt:
 				stress_set_setting("class", TYPE_ID_UINT32, &u32);
 				stress_enable_classes(u32);
 			}
+			break;
+		case OPT_epochs:
+			g_opt_epochs = stress_get_uint32(optarg);
 			break;
 		case OPT_exclude:
 			stress_set_setting_global("exclude", TYPE_ID_STR, (void *)optarg);
