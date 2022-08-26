@@ -12,10 +12,7 @@
 /* Aggregate statistics */
 typedef struct {
     uint32_t n;
-	double min;
-	double max;
-	double mean;
-	double std;
+	double min, max, mean, std, total, var_running;
 } stress_aggregate_stats_t;
 
 void stress_init_aggregate_stats(stress_aggregate_stats_t * stats);
