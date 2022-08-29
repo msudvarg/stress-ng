@@ -2924,16 +2924,35 @@ static void stress_metrics_dump(
 				const char *description = ss->stats[0]->misc_stats[i].description;
 
 				if (*description) {
-					double metric, total = 0.0;
 
-					for (j = 0; j < ss->started_instances; j++) {
-						const stress_stats_t *const stats = ss->stats[j];
+					stress_aggregate_stats_t metric_agg;
+					stress_init_aggregate_stats(&metric_agg);
 
-						total += stats->misc_stats[i].value;
+					uint32_t epoch;
+					for (epoch = 0; epoch < g_opt_epochs; epoch++) {
+						uint32_t epoch_offset = epoch * ss->started_instances;
+
+						double metric, total = 0.0;
+						
+						for (j = 0; j < ss->started_instances; j++) {
+							const stress_stats_t *const stats = ss->stats[epoch_offset + j];
+
+							total += stats->misc_stats[i].value;
+						}
+
+						metric = ss->started_instances ? total / ss->started_instances : 0.0;
+						stress_aggregate_stats_insert(&metric_agg, metric);
+
+					}					
+
+					if(g_opt_epochs == 1) {
+						pr_inf("%-13s %9.2f %s (average per stressor)\n",
+							munged, metric_agg.total, description);
 					}
-					metric = ss->started_instances ? total / ss->started_instances : 0.0;
-					pr_inf("%-13s %9.2f %s (average per stressor)\n",
-						munged, metric, description);
+					else {
+						pr_inf("%-13s min %9.2f, max %9.2f, mean %9.2f, std dev %9.2f %s (average per stressor)\n",
+							munged, metric_agg.min, metric_agg.max, metric_agg.mean, metric_agg.std, description);
+					}
 				}
 			}
 		}
